@@ -1,0 +1,5 @@
+- Name: poll_documents
+  Public access: true (if you want files to be publicly accessible)
+
+- Name: poll_images
+  Public access: true (if you want files to be publicly accessible)

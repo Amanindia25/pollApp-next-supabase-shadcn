@@ -72,13 +72,18 @@ export async function middleware(request: NextRequest) {
   if (
     session &&
     (request.nextUrl.pathname === "/auth/signin" ||
-      request.nextUrl.pathname === "/auth/signup")
+      request.nextUrl.pathname === "/auth/signup" ||
+      request.nextUrl.pathname === "/auth/post-login")
   ) {
     return NextResponse.redirect(new URL("/polldashboard", request.url));
   }
 
   // If user is not signed in and the current path is /polldashboard, redirect to /auth/signin
-  if (!session && request.nextUrl.pathname.startsWith("/polldashboard")) {
+  if (
+    !session &&
+    (request.nextUrl.pathname.startsWith("/polldashboard") ||
+      request.nextUrl.pathname === "/auth/post-login")
+  ) {
     return NextResponse.redirect(new URL("/auth/signin", request.url));
   }
 
@@ -91,5 +96,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/auth/signin", "/auth/signup", "/polldashboard/:path*"],
+  matcher: [
+    "/",
+    "/auth/signin",
+    "/auth/signup",
+    "/auth/post-login",
+    "/polldashboard/:path*",
+  ],
 };
