@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import Image from "next/image";
 
 import { toast } from "sonner";
 import DatePicker from 'react-datepicker';
@@ -45,11 +46,13 @@ interface Poll {
   description_text?: string | null; 
 }
 
-const extractTextFromFile = async (file: File, setExtractionDebugText: React.Dispatch<React.SetStateAction<string>>): Promise<string> => {
+const extractTextFromFile = async (file: File): Promise<string> => {
+  if (!file) {
+    throw new Error('No file provided for text extraction');
+  }
+
   if (file.type === 'application/pdf') {
     try {
-      console.log('Attempting to extract text from PDF:', file.name);
-      setExtractionDebugText('Attempting to extract text from PDF: ' + file.name);
       const pdfjsLib = await import('pdfjs-dist');
       pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
       
@@ -60,29 +63,32 @@ const extractTextFromFile = async (file: File, setExtractionDebugText: React.Dis
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        text += content.items.map((item: any) => item.str).join(' ') + '\n';
+        text += content.items.map((item) => {
+          if ('str' in item) {
+            return item.str;
+          }
+          return '';
+        }).join(' ') + '\n';
       }
       
-      console.log('Successfully extracted text from PDF.');
-      setExtractionDebugText('Successfully extracted text from PDF. Extracted ' + text.length + ' characters.');
-      return text;
-    } catch (error: any) {
-      console.error('Error extracting text from PDF:', error.message, error.stack);
-      setExtractionDebugText('Error extracting text from PDF: ' + error.message + '\n' + error.stack);
-      return '';
+      return text.trim();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to extract text from PDF: ${errorMessage}`);
     }
   } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/msword') {
     try {
       const mammoth = await import('mammoth');
       const arrayBuffer = await file.arrayBuffer();
       const result = await mammoth.extractRawText({ arrayBuffer });
-      return result.value;
+      return result.value.trim();
     } catch (error) {
-      console.error('Error extracting text from DOCX:', error);
-      return '';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to extract text from document: ${errorMessage}`);
     }
   }
-  return '';
+  
+  throw new Error('Unsupported file type for text extraction. Only PDF and Word documents are supported.');
 };
 
 const ManagePollsPage = () => {
@@ -97,7 +103,7 @@ const ManagePollsPage = () => {
   const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // New state for selected file
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null); // New state for file preview
-  const [extractionDebugText, setExtractionDebugText] = useState<string>('');
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -180,6 +186,25 @@ const ManagePollsPage = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
+      
+      // Validate file size
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error('File size exceeds 10MB limit.');
+        event.target.value = '';
+        return;
+      }
+
+      // Validate file type
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'];
+      
+      if (!fileExtension || !allowedExtensions.includes(fileExtension)) {
+        toast.error('Unsupported file type. Allowed types: JPG, PNG, GIF, PDF, DOC, DOCX');
+        event.target.value = '';
+        return;
+      }
+
       setSelectedFile(file);
 
       // Create a preview URL for images
@@ -188,31 +213,29 @@ const ManagePollsPage = () => {
       } else {
         setFilePreviewUrl(null); // Clear preview for non-image files
       }
-      console.log('File selected:', file.name, 'Type:', file.type);
     } else {
       setSelectedFile(null);
       setFilePreviewUrl(null);
-      console.log('No file selected.');
     }
   };
 
-  const uploadFile = async (file: File) => {
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExtension}`;
-    let bucketName: string;
-  
-    if (file.type.startsWith('image/')) {
-      bucketName = 'poll_images';
-    } else if (file.type === 'application/pdf' || file.type === 'application/msword' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      bucketName = 'poll_documents';
-    } else {
-      console.error('Unsupported file type for upload:', file.type);
-      throw new Error('Unsupported file type.');
+  const uploadFile = async (file: File): Promise<string> => {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error('File size exceeds 10MB limit.');
     }
-    console.log('Uploading file:', file.name, 'to bucket:', bucketName, 'Type:', file.type);
-  
+
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'];
+    
+    if (!fileExtension || !allowedExtensions.includes(fileExtension)) {
+      throw new Error('Unsupported file type. Allowed types: JPG, PNG, GIF, PDF, DOC, DOCX');
+    }
+
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExtension}`;
+    const bucketName = file.type.startsWith('image/') ? 'poll_images' : 'poll_documents';
+
     try {
-      // Attempt the upload directly without bucket check
       const { data, error } = await supabase.storage
         .from(bucketName)
         .upload(fileName, file, { 
@@ -220,21 +243,19 @@ const ManagePollsPage = () => {
           upsert: false,
           contentType: file.type
         });
-  
+
       if (error) {
-        console.error('Upload error details:', error);
         throw error;
       }
-  
-      // Get public URL
+
       const { data: publicUrlData } = supabase.storage
         .from(bucketName)
         .getPublicUrl(data.path);
-  
+
       return publicUrlData.publicUrl;
-    } catch (err) {
-      console.error('File upload failed:', err);
-      throw err;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'File upload failed';
+      throw new Error(`Upload failed: ${errorMessage}`);
     }
   };
 
@@ -258,15 +279,19 @@ const ManagePollsPage = () => {
       }
 
       if (selectedFile) {
-        const uploadedUrl = await uploadFile(selectedFile);
-        if (selectedFile.type.startsWith('image/')) {
-          description_image_url = uploadedUrl;
-        } else {
-          description_file_url = uploadedUrl;
-          // Extract text from PDF/DOCX files
-          console.log('Calling extractTextFromFile for:', selectedFile.name);
-          description_text = await extractTextFromFile(selectedFile, setExtractionDebugText);
-          console.log('Extracted text (create poll):', description_text ? description_text.substring(0, 100) + '...' : 'No text extracted');
+        try {
+          const uploadedUrl = await uploadFile(selectedFile);
+          if (selectedFile.type.startsWith('image/')) {
+            description_image_url = uploadedUrl;
+          } else {
+            description_file_url = uploadedUrl;
+            // Extract text from PDF/DOCX files
+            description_text = await extractTextFromFile(selectedFile);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          toast.error(errorMessage);
+          return;
         }
       }
 
@@ -328,19 +353,23 @@ const ManagePollsPage = () => {
 
     try {
       if (selectedFile) {
-        // Upload new file
-        const uploadedUrl = await uploadFile(selectedFile);
-        if (selectedFile.type.startsWith('image/')) {
-          updatedDescriptionImageUrl = uploadedUrl;
-          updatedDescriptionFileUrl = null;
-          updatedDescriptionText = null; // Clear text for images
-        } else {
-          updatedDescriptionFileUrl = uploadedUrl;
-          updatedDescriptionImageUrl = null;
-          // Extract text from PDF/DOCX files
-          console.log('Calling extractTextFromFile for update:', selectedFile.name);
-          updatedDescriptionText = await extractTextFromFile(selectedFile, setExtractionDebugText);
-          console.log('Extracted text (update poll):', updatedDescriptionText ? updatedDescriptionText.substring(0, 100) + '...' : 'No text extracted');
+        try {
+          // Upload new file
+          const uploadedUrl = await uploadFile(selectedFile);
+          if (selectedFile.type.startsWith('image/')) {
+            updatedDescriptionImageUrl = uploadedUrl;
+            updatedDescriptionFileUrl = null;
+            updatedDescriptionText = null; // Clear text for images
+          } else {
+            updatedDescriptionFileUrl = uploadedUrl;
+            updatedDescriptionImageUrl = null;
+            // Extract text from PDF/DOCX files
+            updatedDescriptionText = await extractTextFromFile(selectedFile);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          toast.error(errorMessage);
+          return;
         }
       } else if (filePreviewUrl === null && (editingPoll.description_file_url || editingPoll.description_image_url)) {
         updatedDescriptionFileUrl = null;
@@ -388,23 +417,62 @@ const ManagePollsPage = () => {
   };
 
   const handleDeletePoll = async (pollId: string) => {
-    if (!window.confirm("Are you sure you want to delete this poll?")) {
+    if (!window.confirm("Are you sure you want to delete this poll? This action cannot be undone.")) {
       return;
     }
 
     setLoading(true);
     try {
+      // Get the poll details first to handle file cleanup
+      const { data: pollData, error: pollError } = await supabase
+        .from("polls")
+        .select("*")
+        .eq("id", pollId)
+        .single();
+
+      if (pollError) {
+        throw pollError;
+      }
+
+      // Delete associated files if they exist
+      if (pollData.description_image_url) {
+        const imageFileName = pollData.description_image_url.split('/').pop();
+        if (imageFileName) {
+          const { error: imageDeleteError } = await supabase.storage
+            .from('poll_images')
+            .remove([imageFileName]);
+          if (imageDeleteError) {
+            console.error('Failed to delete image:', imageDeleteError);
+          }
+        }
+      }
+
+      if (pollData.description_file_url) {
+        const fileFileName = pollData.description_file_url.split('/').pop();
+        if (fileFileName) {
+          const { error: fileDeleteError } = await supabase.storage
+            .from('poll_documents')
+            .remove([fileFileName]);
+          if (fileDeleteError) {
+            console.error('Failed to delete document:', fileDeleteError);
+          }
+        }
+      }
+
+      // Delete the poll record
       const { error: deleteError } = await supabase
         .from("polls")
         .delete()
         .eq("id", pollId);
-      if (deleteError) throw deleteError;
 
-      toast.success("Poll deleted successfully!");
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      toast.success("Poll and associated files deleted successfully!");
       setPolls(polls.filter((poll) => poll.id !== pollId));
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       toast.error("Failed to delete poll: " + errorMessage);
     } finally {
       setLoading(false);
@@ -525,28 +593,21 @@ const ManagePollsPage = () => {
                   <div className="col-span-1"></div>
                   <div className="col-span-3">
                     {selectedFile?.type.startsWith('image/') ? (
-                      <img src={filePreviewUrl} alt="File Preview" className="max-w-full h-auto" />
+                      <Image src={filePreviewUrl} alt="File Preview" width={500} height={300} className="max-w-full h-auto" style={{ width: 'auto', height: 'auto' }} />
                     ) : (
                       <p>File selected: {selectedFile?.name}</p>
                     )}
                   </div>
                 </div>
               )}
-              {extractionDebugText && (
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <div className="col-span-1"></div>
-                  <div className="col-span-3 text-sm text-red-500 mt-2">
-                    Debug: {extractionDebugText}
-                  </div>
-                </div>
-              )}
+
               {/* Display existing file/image if editing and no new file selected */}
               {!selectedFile && editingPoll && (editingPoll.description_file_url || editingPoll.description_image_url) && (
                 <div className="grid grid-cols-4 items-center gap-4">
                   <div className="col-span-1"></div>
                   <div className="col-span-3">
                     {editingPoll.description_image_url ? (
-                      <img src={editingPoll.description_image_url} alt="Existing Image" className="max-w-full h-auto" />
+                      <Image src={editingPoll.description_image_url} alt="Existing Image" width={500} height={300} className="max-w-full h-auto" style={{ width: 'auto', height: 'auto' }} />
                     ) : (
                       <p>Existing File: <a href={editingPoll.description_file_url || '#'} target="_blank" rel="noopener noreferrer">View Document</a></p>
                     )}

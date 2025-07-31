@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { MenuIcon } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { MenuIcon, X } from 'lucide-react';
 
 interface UserProfile {
   id: string;
@@ -16,6 +16,8 @@ interface UserProfile {
 const Navbar = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const supabase = createClient();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
