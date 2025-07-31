@@ -12,7 +12,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Navbar />
-        <main className="pt-16 pb-8 px-4 min-h-screen">
+        <main className="pt-16 pb-8 px-4 min-h-screen md:px-8 lg:px-16">
           {children}
         </main>
         <Footer />

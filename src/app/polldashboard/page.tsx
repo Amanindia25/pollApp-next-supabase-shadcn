@@ -148,8 +148,8 @@ const PollsPage = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Active Polls</h1>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center">Active Polls</h1>
       {polls.length === 0 && !loading && (
         <div className="text-center text-gray-500 mt-8">
           No active polls available at the moment.
@@ -164,9 +164,9 @@ const PollsPage = () => {
           const showResults = voted || deadlinePassed;
 
           return (
-            <Card key={poll.id} className="flex flex-col">
+            <Card key={poll.id} className="flex flex-col w-full sm:w-3/4 lg:w-2/3 mx-auto">
               <CardHeader>
-                <CardTitle className="flex justify-between items-start">
+                <CardTitle className="flex justify-between items-start text-lg sm:text-xl">
                   <span>{poll.title}</span>
                   {poll.deadline && (
                     <span className="text-sm text-gray-500">
@@ -248,11 +248,12 @@ const PollsPage = () => {
                 )}
               </CardContent>
 
-              <CardFooter className="flex justify-end">
+              <CardFooter className="flex flex-col sm:flex-row justify-end gap-4">
                 {!showResults && (
                   <Button 
                     onClick={() => handleVote(poll.id)} 
                     disabled={!selectedOptions[poll.id] || isSubmitting}
+                    className="w-full sm:w-auto"
                   >
                     {isSubmitting ? 'Submitting...' : 'Submit Vote'}
                   </Button>
