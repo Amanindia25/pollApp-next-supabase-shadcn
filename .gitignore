@@ -9,7 +9,7 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+credentials.json # explicitly ignored
 # testing
 /coverage
 

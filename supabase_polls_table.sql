@@ -47,3 +47,9 @@ CREATE POLICY "Authenticated users can view own poll responses" ON poll_response
 -- Policy for poll_responses: authenticated users can insert responses
 CREATE POLICY "Authenticated users can insert poll responses" ON poll_responses
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- Add description columns to polls table
+ALTER TABLE polls
+ADD COLUMN description_file_url TEXT,
+ADD COLUMN description_image_url TEXT,
+ADD COLUMN description_text TEXT;
