@@ -22,6 +22,30 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const handleGoogleSignIn = async () => {
+    setErrorMessage("");
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.error('Google sign-in error:', error);
+        setErrorMessage(error.message || 'Failed to sign in with Google.');
+        toast.error(error.message || 'Failed to sign in with Google.');
+      }
+    } catch (err) {
+      console.error('Unexpected error during Google sign-in:', err);
+      setErrorMessage('An unexpected error occurred. Please try again.');
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ✅ Check for auth callback error in URL
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -81,7 +105,7 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-background px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-background px-4 rounded-2xl">
       <Card className="w-full max-w-md p-6 shadow-lg border rounded-2xl">
         <CardContent>
           <h2 className="text-2xl font-bold mb-6 text-center">Sign In</h2>
@@ -121,6 +145,26 @@ export default function SignInPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
+            </Button>
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button 
+              type="button" 
+              className="w-full bg-red-500 hover:bg-black-600 text-white"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+            >
+              Sign In with Google
             </Button>
           </form>
 
